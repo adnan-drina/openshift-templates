@@ -154,18 +154,19 @@ function deploy() {
 
   sleep 2
 
-  echo "Adding templates for Gogs, Nexus3 and SonarQube in namespace cicd-$PRJ_SUFFIX"
+  echo "Adding templates for Gogs, Nexus3 and SonarQube"
   oc create -f https://raw.githubusercontent.com/$GITHUB_ACCOUNT/$GITHUB_PROJECT/$GITHUB_REF/gogs-template.yaml -n cicd-$PRJ_SUFFIX
   oc create -f https://raw.githubusercontent.com/$GITHUB_ACCOUNT/$GITHUB_PROJECT/$GITHUB_REF/gogs-persistent-template.yaml -n cicd-$PRJ_SUFFIX
   oc create -f https://raw.githubusercontent.com/$GITHUB_ACCOUNT/$GITHUB_PROJECT/$GITHUB_REF/nexus3-template.yaml -n cicd-$PRJ_SUFFIX
   oc create -f https://raw.githubusercontent.com/$GITHUB_ACCOUNT/$GITHUB_PROJECT/$GITHUB_REF/nexus3-persistent-template.yaml -n cicd-$PRJ_SUFFIX
   oc create -f https://raw.githubusercontent.com/$GITHUB_ACCOUNT/$GITHUB_PROJECT/$GITHUB_REF/sonarqube-template.yaml -n cicd-$PRJ_SUFFIX
   oc create -f https://raw.githubusercontent.com/$GITHUB_ACCOUNT/$GITHUB_PROJECT/$GITHUB_REF/sonarqube-postgresql-template.yaml -n cicd-$PRJ_SUFFIX
+  echo "Crated in namespace cicd-$PRJ_SUFFIX"
 
   sleep 2
 
   local template=https://raw.githubusercontent.com/$GITHUB_ACCOUNT/$GITHUB_PROJECT/$GITHUB_REF/$GITHUB_FILE
-  echo "Using template $GITHUB_FILE from $template"
+  echo "Using template $GITHUB_FILE"
   oc $ARG_OC_OPS new-app -f $template --param DEV_PROJECT=dev-$PRJ_SUFFIX --param STAGE_PROJECT=stage-$PRJ_SUFFIX --param=WITH_SONAR=$ARG_DEPLOY_SONAR --param=WITH_CHE=$ARG_DEPLOY_CHE --param=EPHEMERAL=$ARG_EPHEMERAL -n cicd-$PRJ_SUFFIX
 
   sleep 10
