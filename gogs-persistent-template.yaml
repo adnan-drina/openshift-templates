@@ -4,7 +4,7 @@ metadata:
   annotations:
     description: The Gogs git server (https://gogs.io/)
     tags: instant-app,gogs,go,golang
-  name: gogs
+  name: gogs-persistent
 objects:
 - kind: ServiceAccount
   apiVersion: v1

@@ -11,16 +11,16 @@ metadata:
 message: "Use the following credentials for login:\nJenkins: use your OpenShift credentials\nNexus: admin/admin123\nSonarQube: admin/admin\nGogs Git Server: gogs/gogs"
 parameters:
 - displayName: DEV project name
-  value: dev
+  value: dev-msa
   name: DEV_PROJECT
   required: true
 - displayName: STAGE project name
-  value: stage
+  value: stage-msa
   name: STAGE_PROJECT
   required: true
 - displayName: Deploy SonarQube
   description: If SonarQube should be deployed and used in the pipeline. Set to false to preserve resources.
-  value: "true"
+  value: "false"
   name: WITH_SONAR
   required: true
 - displayName: Deploy Eclipse Che
@@ -302,46 +302,51 @@ objects:
             oc label dc jenkins app=jenkins --overwrite
 
             HOSTNAME=$(oc get route jenkins -o template --template='{{.spec.host}}' | sed "s/jenkins-${CICD_NAMESPACE}.//g")
+
+            sleep 30
+
             GOGS_HOSTNAME="gogs-$CICD_NAMESPACE.$HOSTNAME"
 
             if [ "${EPHEMERAL}" == "true" ] ; then
               oc process gogs \
-                  --param=GOGS_VERSION=0.11.29 \
-                  --param=HOSTNAME=$GOGS_HOSTNAME \
-                  --param=SKIP_TLS_VERIFY=true \
+                  -p GOGS_VERSION=0.11.29 \
+                  -p HOSTNAME=$GOGS_HOSTNAME \
+                  -p SKIP_TLS_VERIFY=true \
                   | oc create -f -
             else
               oc process gogs-persistent \
-                  --param=GOGS_VERSION=0.11.29 \
-                  --param=HOSTNAME=$GOGS_HOSTNAME \
-                  --param=SKIP_TLS_VERIFY=true \
+                  -p GOGS_VERSION=0.11.29 \
+                  -p HOSTNAME=$GOGS_HOSTNAME \
+                  -p SKIP_TLS_VERIFY=true \
                   | oc create -f -
             fi
 
-            sleep 5
+            sleep 60
 
             if [ "${WITH_SONAR}" == "true" ] ; then
-              oc process sonarqube --param=SONARQUBE_VERSION=6.7 --param=SONAR_MAX_MEMORY=4Gi \
+              oc process sonarqube -p SONARQUBE_VERSION=6.7 -p SONAR_MAX_MEMORY=4Gi \
               | oc create -f -
             fi
 
             if [ "${WITH_CHE}" == "true" ] ; then
               oc process -f https://raw.githubusercontent.com/minishift/minishift-addons/master/add-ons/che/templates/che-single-user.yml \
-                --param PROJECT_NAME=$CICD_NAMESPACE \
-                --param DOMAIN_NAME=$HOSTNAME \
-                --param OPENSHIFT_OAUTH_TOKEN="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \
+                -p PROJECT_NAME=$CICD_NAMESPACE \
+                -p DOMAIN_NAME=$HOSTNAME \
+                -p OPENSHIFT_OAUTH_TOKEN="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \
                 | oc create -f -
 
               oc set resources dc/che --limits=cpu=1,memory=2Gi --requests=cpu=200m,memory=512Mi
             fi
 
             if [ "${EPHEMERAL}" == "true" ] ; then
-              oc process nexus3 --param=NEXUS_VERSION=3.6.1 --param=MAX_MEMORY=2Gi \
+              oc process nexus3 -p NEXUS_VERSION=3.6.1 -p MAX_MEMORY=2Gi \
               | oc create -f -
             else
-              oc process nexus3-persistent --param=NEXUS_VERSION=3.6.1 --param=MAX_MEMORY=2Gi \
+              oc process nexus3-persistent -p NEXUS_VERSION=3.6.1 -p MAX_MEMORY=2Gi \
               | oc create -f -
             fi
+
+            sleep 60
 
             GOGS_SVC=$(oc get svc gogs -o template --template='{{.spec.clusterIP}}')
             GOGS_USER=gogs
