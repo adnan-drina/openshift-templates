@@ -12,18 +12,18 @@ function usage() {
     echo " $0 --help"
     echo
     echo "Example:"
-    echo " $0 deploy --project-suffix mydemo"
+    echo " $0 deploy --user adrina --project-suffix msa --ephemeral"
     echo
     echo "COMMANDS:"
-    echo "   deploy                   Set up the demo projects and deploy demo apps"
-    echo "   delete                   Clean up and remove demo projects and objects"
-    echo "   idle                     Make all demo services idle"
-    echo "   unidle                   Make all demo services unidle"
+    echo "   deploy                   Set up the cicd projects and deploy cicd apps"
+    echo "   delete                   Clean up and remove cicd projects and objects"
+    echo "   idle                     Make all cicd services idle"
+    echo "   unidle                   Make all cicd services unidle"
     echo
     echo "OPTIONS:"
-    echo "   --user [username]         The admin user for the demo projects. mandatory if logged in as system:admin"
-    echo "   --project-suffix [suffix] Suffix to be added to demo project names e.g. ci-SUFFIX. If empty, user will be used as suffix"
-    echo "   --ephemeral               Deploy demo without persistent storage. Default false"
+    echo "   --user [username]         The admin user for the cicd projects. mandatory if logged in as system:admin"
+    echo "   --project-suffix [suffix] Suffix to be added to cicd project names e.g. ci-SUFFIX. If empty, user will be used as suffix"
+    echo "   --ephemeral               Deploy cicd without persistent storage. Default false"
     echo "   --deploy-sonar            Deploy SonarQube for static code analysis instead of CheckStyle,FindBug,etc. Default false"
     echo "   --deploy-che              Deploy Eclipse Che as an online IDE for code changes. Default false"
     echo "   --oc-options              oc client options to pass to all oc commands e.g. --server https://my.openshift.com"
@@ -121,8 +121,10 @@ done
 LOGGEDIN_USER=$(oc $ARG_OC_OPS whoami)
 OPENSHIFT_USER=${ARG_USERNAME:-$LOGGEDIN_USER}
 PRJ_SUFFIX=${ARG_PROJECT_SUFFIX:-`echo $OPENSHIFT_USER | sed -e 's/[-@].*//g'`}
-GITHUB_ACCOUNT=${GITHUB_ACCOUNT:-OpenShiftDemos}
-GITHUB_REF=${GITHUB_REF:-ocp-3.7}
+GITHUB_ACCOUNT=${GITHUB_ACCOUNT:-adnan-drina}
+GITHUB_PROJECT=${GITHUB_PROJECT:-openshift-templates}
+GITHUB_REF=${GITHUB_REF:-master}
+GITHUB_FILE=${GITHUB_FILE:-cicd-template.yaml}
 
 function deploy() {
   oc $ARG_OC_OPS new-project dev-$PRJ_SUFFIX   --display-name="Tasks - Dev"
@@ -148,18 +150,15 @@ function deploy() {
 
   sleep 2
 
-  oc import-image jenkins:v3.7 --from="registry.access.redhat.com/openshift3/jenkins-2-rhel7" --confirm -n openshift 2>/dev/null
-
-  sleep 5
-
-  oc tag jenkins:v3.7 jenkins:latest -n openshift
   oc new-app jenkins-ephemeral -n cicd-$PRJ_SUFFIX
 
   sleep 2
 
-  local template=https://raw.githubusercontent.com/$GITHUB_ACCOUNT/openshift-cd-demo/$GITHUB_REF/cicd-template.yaml
-  echo "Using template $template"
-  oc $ARG_OC_OPS new-app -f $template --param DEV_PROJECT=dev-$PRJ_SUFFIX --param STAGE_PROJECT=stage-$PRJ_SUFFIX --param=WITH_SONAR=$ARG_DEPLOY_SONAR --param=WITH_CHE=$ARG_DEPLOY_CHE --param=EPHEMERAL=$ARG_EPHEMERAL -n cicd-$PRJ_SUFFIX
+  # local template=https://raw.githubusercontent.com/$GITHUB_ACCOUNT/$GITHUB_PROJECT/$GITHUB_REF/$GITHUB_FILE
+  # echo "Using template $GITHUB_FILE from $template"
+  # oc $ARG_OC_OPS new-app -f $template --param DEV_PROJECT=dev-$PRJ_SUFFIX --param STAGE_PROJECT=stage-$PRJ_SUFFIX --param=WITH_SONAR=$ARG_DEPLOY_SONAR --param=WITH_CHE=$ARG_DEPLOY_CHE --param=EPHEMERAL=$ARG_EPHEMERAL -n cicd-$PRJ_SUFFIX
+
+  sleep 10
 }
 
 function make_idle() {
@@ -207,7 +206,7 @@ function echo_header() {
 }
 
 ################################################################################
-# MAIN: DEPLOY DEMO                                                            #
+# MAIN: DEPLOY CI\CD                                                            #
 ################################################################################
 
 if [ "$LOGGEDIN_USER" == 'system:admin' ] && [ -z "$ARG_USERNAME" ] ; then
@@ -225,32 +224,32 @@ fi
 pushd ~ >/dev/null
 START=`date +%s`
 
-echo_header "OpenShift CI/CD Demo ($(date))"
+echo_header "OpenShift CI/CD ($(date))"
 
 case "$ARG_COMMAND" in
     delete)
-        echo "Delete demo..."
+        echo "Delete cicd..."
         oc $ARG_OC_OPS delete project dev-$PRJ_SUFFIX stage-$PRJ_SUFFIX cicd-$PRJ_SUFFIX
         echo
         echo "Delete completed successfully!"
         ;;
 
     idle)
-        echo "Idling demo..."
+        echo "Idling cicd..."
         make_idle
         echo
         echo "Idling completed successfully!"
         ;;
 
     unidle)
-        echo "Unidling demo..."
+        echo "Unidling cicd..."
         make_unidle
         echo
         echo "Unidling completed successfully!"
         ;;
 
     deploy)
-        echo "Deploying demo..."
+        echo "Deploying cicd..."
         deploy
         echo
         echo "Provisioning completed successfully!"
@@ -267,4 +266,4 @@ popd >/dev/null
 
 END=`date +%s`
 echo "(Completed in $(( ($END - $START)/60 )) min $(( ($END - $START)%60 )) sec)"
-echo 
+echo
