@@ -10,7 +10,7 @@ objects:
 - apiVersion: v1
   kind: Service
   metadata:
-    name: sonarqube
+    name: sonarqube-persistent
     labels:
       app: sonarqube
   spec:
