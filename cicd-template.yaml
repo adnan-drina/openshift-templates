@@ -107,12 +107,6 @@ objects:
       spec:
         containers:
         - env:
-          - name: http_proxy
-            value: http://172.23.29.156:3128
-          - name: https_proxy
-            value: http://172.23.29.156:3128
-          - name: no_proxy
-            value: '.cluster.local,.svc,172.23.113.245,172.23.113.246,172.23.113.247,lg-l-d-osf00001.libgbl.biz,lg-l-d-osf00002.libgbl.biz,lg-l-d-osf00003.libgbl.biz,lg-l-d-osf00004.libgbl.biz,lg-l-d-osf00005.libgbl.biz,lg-l-d-osf00006.libgbl.biz,lg-l-d-osf00007.libgbl.biz,.libgbl.biz'
           - name: CICD_NAMESPACE
             valueFrom:
               fieldRef:
