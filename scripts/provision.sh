@@ -12,7 +12,7 @@ function usage() {
     echo " $0 --help"
     echo
     echo "Example:"
-    echo " $0 deploy --user adrina --project-suffix msa --ephemeral"
+    echo " $0 deploy --project-suffix msa"
     echo
     echo "COMMANDS:"
     echo "   deploy                   Set up the cicd projects and deploy cicd apps"
@@ -23,9 +23,6 @@ function usage() {
     echo "OPTIONS:"
     echo "   --user [username]         The admin user for the cicd projects. mandatory if logged in as system:admin"
     echo "   --project-suffix [suffix] Suffix to be added to cicd project names e.g. ci-SUFFIX. If empty, user will be used as suffix"
-    echo "   --ephemeral               Deploy cicd without persistent storage. Default false"
-    echo "   --deploy-sonar            Deploy SonarQube for static code analysis instead of CheckStyle,FindBug,etc. Default false"
-    echo "   --deploy-che              Deploy Eclipse Che as an online IDE for code changes. Default false"
     echo "   --oc-options              oc client options to pass to all oc commands e.g. --server https://my.openshift.com"
     echo
 }
@@ -33,10 +30,7 @@ function usage() {
 ARG_USERNAME=
 ARG_PROJECT_SUFFIX=
 ARG_COMMAND=
-ARG_EPHEMERAL=false
 ARG_OC_OPS=
-ARG_DEPLOY_SONAR=false
-ARG_DEPLOY_CHE=false
 
 while :; do
     case $1 in
@@ -82,18 +76,6 @@ while :; do
                 exit 255
             fi
             ;;
-        --ephemeral)
-            ARG_EPHEMERAL=true
-            ;;
-        --use-sonar)
-            ARG_DEPLOY_SONAR=true
-            ;;
-        --deploy-sonar)
-            ARG_DEPLOY_SONAR=true
-            ;;
-        --deploy-che)
-            ARG_DEPLOY_CHE=true
-            ;;
         -h|--help)
             usage
             exit 0
@@ -121,10 +103,6 @@ done
 LOGGEDIN_USER=$(oc $ARG_OC_OPS whoami)
 OPENSHIFT_USER=${ARG_USERNAME:-$LOGGEDIN_USER}
 PRJ_SUFFIX=${ARG_PROJECT_SUFFIX:-`echo $OPENSHIFT_USER | sed -e 's/[-@].*//g'`}
-GITHUB_ACCOUNT=${GITHUB_ACCOUNT:-adnan-drina}
-GITHUB_PROJECT=${GITHUB_PROJECT:-openshift-templates}
-GITHUB_REF=${GITHUB_REF:-master}
-GITHUB_FILE=${GITHUB_FILE:-cicd-template.yaml}
 
 function deploy() {
   oc $ARG_OC_OPS new-project dev-$PRJ_SUFFIX   --display-name="Tasks - Dev"
@@ -154,11 +132,6 @@ function deploy() {
 
   sleep 2
 
-  # local template=https://raw.githubusercontent.com/$GITHUB_ACCOUNT/$GITHUB_PROJECT/$GITHUB_REF/$GITHUB_FILE
-  # echo "Using template $GITHUB_FILE from $template"
-  # oc $ARG_OC_OPS new-app -f $template --param DEV_PROJECT=dev-$PRJ_SUFFIX --param STAGE_PROJECT=stage-$PRJ_SUFFIX --param=WITH_SONAR=$ARG_DEPLOY_SONAR --param=WITH_CHE=$ARG_DEPLOY_CHE --param=EPHEMERAL=$ARG_EPHEMERAL -n cicd-$PRJ_SUFFIX
-
-  sleep 10
 }
 
 function make_idle() {
