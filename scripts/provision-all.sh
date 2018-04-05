@@ -12,20 +12,19 @@ function usage() {
     echo " $0 --help"
     echo
     echo "Example:"
-    echo " $0 deploy --user adrina --project-suffix msa --ephemeral"
+    echo " $0 deploy --project-suffix mydemo"
     echo
     echo "COMMANDS:"
-    echo "   deploy                   Set up the cicd projects and deploy cicd apps"
-    echo "   delete                   Clean up and remove cicd projects and objects"
-    echo "   idle                     Make all cicd services idle"
-    echo "   unidle                   Make all cicd services unidle"
+    echo "   deploy                   Set up the demo projects and deploy demo apps"
+    echo "   delete                   Clean up and remove demo projects and objects"
+    echo "   idle                     Make all demo servies idle"
+    echo "   unidle                   Make all demo servies unidle"
     echo
     echo "OPTIONS:"
-    echo "   --user [username]         The admin user for the cicd projects. mandatory if logged in as system:admin"
-    echo "   --project-suffix [suffix] Suffix to be added to cicd project names e.g. ci-SUFFIX. If empty, user will be used as suffix"
-    echo "   --ephemeral               Deploy cicd without persistent storage. Default false"
-    echo "   --deploy-sonar            Deploy SonarQube for static code analysis instead of CheckStyle,FindBug,etc. Default false"
-    echo "   --deploy-che              Deploy Eclipse Che as an online IDE for code changes. Default false"
+    echo "   --user [username]         The admin user for the demo projects. mandatory if logged in as system:admin"
+    echo "   --project-suffix [suffix] Suffix to be added to demo project names e.g. ci-SUFFIX. If empty, user will be used as suffix"
+    echo "   --ephemeral               Deploy demo without persistent storage"
+    echo "   --use-sonar               Use SonarQube for static code analysis instead of CheckStyle,FindBug,etc"
     echo "   --oc-options              oc client options to pass to all oc commands e.g. --server https://my.openshift.com"
     echo
 }
@@ -35,8 +34,7 @@ ARG_PROJECT_SUFFIX=
 ARG_COMMAND=
 ARG_EPHEMERAL=false
 ARG_OC_OPS=
-ARG_DEPLOY_SONAR=false
-ARG_DEPLOY_CHE=false
+ARG_USE_SONAR=false
 
 while :; do
     case $1 in
@@ -86,13 +84,7 @@ while :; do
             ARG_EPHEMERAL=true
             ;;
         --use-sonar)
-            ARG_DEPLOY_SONAR=true
-            ;;
-        --deploy-sonar)
-            ARG_DEPLOY_SONAR=true
-            ;;
-        --deploy-che)
-            ARG_DEPLOY_CHE=true
+            ARG_USE_SONAR=true
             ;;
         -h|--help)
             usage
@@ -121,10 +113,8 @@ done
 LOGGEDIN_USER=$(oc $ARG_OC_OPS whoami)
 OPENSHIFT_USER=${ARG_USERNAME:-$LOGGEDIN_USER}
 PRJ_SUFFIX=${ARG_PROJECT_SUFFIX:-`echo $OPENSHIFT_USER | sed -e 's/[-@].*//g'`}
-GITHUB_ACCOUNT=${GITHUB_ACCOUNT:-adnan-drina}
-GITHUB_PROJECT=${GITHUB_PROJECT:-openshift-templates}
-GITHUB_REF=${GITHUB_REF:-master}
-GITHUB_FILE=${GITHUB_FILE:-cicd-template.yaml}
+GITHUB_ACCOUNT=${GITHUB_ACCOUNT:-OpenShiftDemos}
+GITHUB_REF=${GITHUB_REF:-ocp-3.6}
 
 function deploy() {
   oc $ARG_OC_OPS new-project dev-$PRJ_SUFFIX   --display-name="Tasks - Dev"
@@ -150,26 +140,34 @@ function deploy() {
 
   sleep 2
 
-  oc new-app jenkins-ephemeral -n cicd-$PRJ_SUFFIX
+  local jenkins_template="jenkins-persistent"
+  if [ "$ARG_EPHEMERAL" = true ] ; then
+    jenkins_template="jenkins-ephemeral"
+  fi
+
+  oc $ARG_OC_OPS new-app $jenkins_template --param=MEMORY_LIMIT=1Gi -e INSTALL_PLUGINS=analysis-core:1.92,findbugs:4.71,pmd:3.49,checkstyle:3.49,dependency-check-jenkins-plugin:2.1.1,htmlpublisher:1.14,jacoco:2.2.1,analysis-collector:1.52 -n cicd-$PRJ_SUFFIX
 
   sleep 2
 
-  echo "Adding templates for Gogs, Nexus3 and SonarQube"
-  oc create -f https://raw.githubusercontent.com/$GITHUB_ACCOUNT/$GITHUB_PROJECT/$GITHUB_REF/gogs-template.yaml -n cicd-$PRJ_SUFFIX
-  oc create -f https://raw.githubusercontent.com/$GITHUB_ACCOUNT/$GITHUB_PROJECT/$GITHUB_REF/gogs-persistent-template.yaml -n cicd-$PRJ_SUFFIX
-  oc create -f https://raw.githubusercontent.com/$GITHUB_ACCOUNT/$GITHUB_PROJECT/$GITHUB_REF/nexus3-template.yaml -n cicd-$PRJ_SUFFIX
-  oc create -f https://raw.githubusercontent.com/$GITHUB_ACCOUNT/$GITHUB_PROJECT/$GITHUB_REF/nexus3-persistent-template.yaml -n cicd-$PRJ_SUFFIX
-  oc create -f https://raw.githubusercontent.com/$GITHUB_ACCOUNT/$GITHUB_PROJECT/$GITHUB_REF/sonarqube-template.yaml -n cicd-$PRJ_SUFFIX
-  oc create -f https://raw.githubusercontent.com/$GITHUB_ACCOUNT/$GITHUB_PROJECT/$GITHUB_REF/sonarqube-postgresql-template.yaml -n cicd-$PRJ_SUFFIX
-  echo "Crated in namespace cicd-$PRJ_SUFFIX"
+  local template=https://raw.githubusercontent.com/$GITHUB_ACCOUNT/openshift-cd-demo/$GITHUB_REF/cicd-template.yaml
+
+  if [ "$ARG_USE_SONAR" = true ] ; then
+    template=https://raw.githubusercontent.com/$GITHUB_ACCOUNT/openshift-cd-demo/$GITHUB_REF/cicd-template-with-sonar.yaml
+  fi
+
+  echo "Using template $template"
+  oc $ARG_OC_OPS process -f $template \
+      DEV_PROJECT=dev-$PRJ_SUFFIX \
+      STAGE_PROJECT=stage-$PRJ_SUFFIX \
+      -n cicd-$PRJ_SUFFIX | oc $ARG_OC_OPS create -f - -n cicd-$PRJ_SUFFIX
 
   sleep 2
 
-  local template=https://raw.githubusercontent.com/$GITHUB_ACCOUNT/$GITHUB_PROJECT/$GITHUB_REF/$GITHUB_FILE
-  echo "Using template $GITHUB_FILE"
-  oc $ARG_OC_OPS new-app -f $template --param DEV_PROJECT=dev-$PRJ_SUFFIX --param STAGE_PROJECT=stage-$PRJ_SUFFIX --param=WITH_SONAR=$ARG_DEPLOY_SONAR --param=WITH_CHE=$ARG_DEPLOY_CHE --param=EPHEMERAL=$ARG_EPHEMERAL -n cicd-$PRJ_SUFFIX
-
-  sleep 10
+  if [ "$ARG_EPHEMERAL" = true ] ; then
+    remove_storage_claim postgresql-gogs postgresql-data postgresql-gogs-data cicd-$PRJ_SUFFIX
+    remove_storage_claim gogs gogs-data gogs-data cicd-$PRJ_SUFFIX
+    remove_storage_claim gogs gogs-config gogs-config cicd-$PRJ_SUFFIX
+  fi
 }
 
 function make_idle() {
@@ -194,12 +192,6 @@ function make_unidle() {
   done
 }
 
-function set_default_project() {
-  if [ $LOGGEDIN_USER == 'system:admin' ] ; then
-    oc $ARG_OC_OPS project default >/dev/null
-  fi
-}
-
 function remove_storage_claim() {
   local _DC=$1
   local _VOLUME_NAME=$2
@@ -207,6 +199,12 @@ function remove_storage_claim() {
   local _PROJECT=$4
   oc $ARG_OC_OPS volumes dc/$_DC --name=$_VOLUME_NAME --add -t emptyDir --overwrite -n $_PROJECT
   oc $ARG_OC_OPS delete pvc $_CLAIM_NAME -n $_PROJECT >/dev/null 2>&1
+}
+
+function set_default_project() {
+  if [ $LOGGEDIN_USER == 'system:admin' ] ; then
+    oc $ARG_OC_OPS project default >/dev/null
+  fi
 }
 
 function echo_header() {
@@ -217,7 +215,7 @@ function echo_header() {
 }
 
 ################################################################################
-# MAIN: DEPLOY CI\CD                                                            #
+# MAIN: DEPLOY DEMO                                                            #
 ################################################################################
 
 if [ "$LOGGEDIN_USER" == 'system:admin' ] && [ -z "$ARG_USERNAME" ] ; then
@@ -235,32 +233,32 @@ fi
 pushd ~ >/dev/null
 START=`date +%s`
 
-echo_header "OpenShift CI/CD ($(date))"
+echo_header "OpenShift CI/CD Demo ($(date))"
 
 case "$ARG_COMMAND" in
     delete)
-        echo "Delete cicd..."
+        echo "Delete demo..."
         oc $ARG_OC_OPS delete project dev-$PRJ_SUFFIX stage-$PRJ_SUFFIX cicd-$PRJ_SUFFIX
         echo
         echo "Delete completed successfully!"
         ;;
 
     idle)
-        echo "Idling cicd..."
+        echo "Idling demo..."
         make_idle
         echo
         echo "Idling completed successfully!"
         ;;
 
     unidle)
-        echo "Unidling cicd..."
+        echo "Unidling demo..."
         make_unidle
         echo
         echo "Unidling completed successfully!"
         ;;
 
     deploy)
-        echo "Deploying cicd..."
+        echo "Deploying demo..."
         deploy
         echo
         echo "Provisioning completed successfully!"
@@ -278,3 +276,5 @@ popd >/dev/null
 END=`date +%s`
 echo "(Completed in $(( ($END - $START)/60 )) min $(( ($END - $START)%60 )) sec)"
 echo
+
+  sleep 10
