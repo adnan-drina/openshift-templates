@@ -253,8 +253,8 @@ objects:
         - env:
           - name: CONTEXT_PATH
             value: /
-        - image: ' '
-          imagePullPolicy: Always
+          image: ' '
+          imagePullPolicy: IfNotPresent
           name: nexus
           ports:
           - containerPort: 8081
