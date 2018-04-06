@@ -3,7 +3,7 @@ kind: Template
 labels:
   template: spring-app-template
 metadata:
-  name: spring-app-template
+  name: ${APPLICATION_NAME}
 objects:
 - apiVersion: v1
   data:
@@ -77,9 +77,6 @@ objects:
     - generic:
         secret: kJZLvfQr3hZg
       type: Generic
-    - imageChange: {}
-      type: ImageChange
-    - type: ConfigChange
 - apiVersion: v1
   kind: DeploymentConfig
   metadata:
@@ -109,7 +106,7 @@ objects:
         containers:
         - env:
           - name: SERVER_PORT
-            value: 8080
+            value: "8080"
           - name: MY_POD_IP
             valueFrom:
               fieldRef:
@@ -169,6 +166,42 @@ objects:
           name: ${APPLICATION_NAME}
       type: ImageChange
     - type: ConfigChange
+- apiVersion: v1
+  kind: BuildConfig
+  labels:
+    app: ${APPLICATION_NAME}-pipeline-development
+    name: ${APPLICATION_NAME}-development-pipeline
+    template: application-template-development-pipeline
+  metadata:
+    name: ${APPLICATION_NAME}-development-pipeline
+  spec:
+    output: {}
+    postCommit: {}
+    resources: {}
+    runPolicy: Serial
+    source:
+      type: None
+    strategy:
+      jenkinsPipelineStrategy:
+        jenkinsfile: |-
+          node('maven') {
+          stage 'build'
+          openshiftBuild(buildConfig: ${APPLICATION_NAME}, showBuildLogs: 'true', namespace: ${NAMESPACE})
+          stage 'deploy'
+          openshiftDeploy(deploymentConfig: ${APPLICATION_NAME}, namespace: ${NAMESPACE})
+          }
+      type: JenkinsPipeline
+    triggers:
+    - github:
+        secret: secret101
+      sourceSecret:
+        name: gitlab-user
+      type: GitHub
+    - generic:
+        secret: secret101
+      type: Generic
+  status:
+    lastVersion: 0
 parameters:
 - description: The name for the application.
   name: APPLICATION_NAME
@@ -181,3 +214,6 @@ parameters:
 - description: Git branch/tag reference
   name: SOURCE_REF
   value: master
+- description: Project namespace on OpenShift
+  name: NAMESPACE
+  value: dev
