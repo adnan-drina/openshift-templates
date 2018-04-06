@@ -171,7 +171,7 @@ objects:
   labels:
     app: ${APPLICATION_NAME}-pipeline-development
     name: ${APPLICATION_NAME}-development-pipeline
-    template: application-template-development-pipeline
+    template: development-pipeline
   metadata:
     name: ${APPLICATION_NAME}-development-pipeline
   spec:
@@ -185,10 +185,11 @@ objects:
       jenkinsPipelineStrategy:
         jenkinsfile: |-
           node('maven') {
-          stage 'build'
-          openshiftBuild(buildConfig: ${APPLICATION_NAME}, showBuildLogs: 'true', namespace: ${NAMESPACE})
-          stage 'deploy'
-          openshiftDeploy(deploymentConfig: ${APPLICATION_NAME}, namespace: ${NAMESPACE})
+            stage 'build'
+            openshiftBuild(buildConfig: ${APPLICATION_NAME}, showBuildLogs: 'true', namespace: ${NAMESPACE})
+
+            stage 'deploy'
+            openshiftDeploy(deploymentConfig: ${APPLICATION_NAME}, namespace: ${NAMESPACE})
           }
       type: JenkinsPipeline
     triggers:
@@ -200,8 +201,6 @@ objects:
     - generic:
         secret: secret101
       type: Generic
-  status:
-    lastVersion: 0
 parameters:
 - description: The name for the application.
   name: APPLICATION_NAME
