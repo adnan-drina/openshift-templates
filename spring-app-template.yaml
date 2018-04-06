@@ -108,6 +108,8 @@ objects:
       spec:
         containers:
         - env:
+          - name: SERVER_PORT
+            value: 8080
           - name: MY_POD_IP
             valueFrom:
               fieldRef:
