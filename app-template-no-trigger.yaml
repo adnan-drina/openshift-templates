@@ -1,27 +1,10 @@
 apiVersion: v1
 kind: Template
 labels:
-  template: spring-app-template-with-pipeline
+  template: openshift-tasks-no-trigger
 metadata:
-  labels:
-    application: ${APPLICATION_NAME}
-  name: ${APPLICATION_NAME}
+  name: openshift-tasks-no-trigger
 objects:
-- apiVersion: v1
-  data:
-    password: S3l4bnNuQ0FXMzdjNU14eDdOOUw=
-  kind: Secret
-  metadata:
-    name: gitlab-user
-  type: kubernetes.io/basic-auth
-- apiVersion: v1
-  data:
-    password: b3BlbnNoaWZ0MTIz
-    username: b3BlbnNoaWZ0
-  kind: Secret
-  metadata:
-    name: gitlab-user-pass
-  type: kubernetes.io/basic-auth
 - apiVersion: v1
   kind: ImageStream
   metadata:
@@ -69,15 +52,13 @@ objects:
       git:
         ref: ${SOURCE_REF}
         uri: ${SOURCE_URL}
-      sourceSecret:
-        name: gitlab-user
       type: Git
     strategy:
       sourceStrategy:
         forcePull: true
         from:
           kind: ImageStreamTag
-          name: redhat-openjdk18-openshift:latest
+          name: jboss-eap70-openshift:1.4
           namespace: openshift
       type: Source
     triggers:
@@ -87,6 +68,9 @@ objects:
     - generic:
         secret: kJZLvfQr3hZg
       type: Generic
+    - imageChange: {}
+      type: ImageChange
+    - type: ConfigChange
 - apiVersion: v1
   kind: DeploymentConfig
   metadata:
@@ -115,14 +99,27 @@ objects:
       spec:
         containers:
         - env:
-          - name: SERVER_PORT
-            value: "8080"
+          - name: MY_POD_IP
+            valueFrom:
+              fieldRef:
+                apiVersion: v1
+                fieldPath: status.podIP
+          - name: OPENSHIFT_KUBE_PING_LABELS
+            value: application=${APPLICATION_NAME}
+          - name: OPENSHIFT_KUBE_PING_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: HORNETQ_CLUSTER_PASSWORD
+            value: kJZLvfQr3hZg
+          - name: JGROUPS_CLUSTER_PASSWORD
+            value: kJZLvfQr3hZg
           image: ${APPLICATION_NAME}
           imagePullPolicy: Always
           livenessProbe:
             failureThreshold: 3
             httpGet:
-              path: /health
+              path: /ws/demo/healthcheck
               port: 8080
               scheme: HTTP
             initialDelaySeconds: 45
@@ -131,6 +128,9 @@ objects:
             timeoutSeconds: 1
           name: ${APPLICATION_NAME}
           ports:
+          - containerPort: 8778
+            name: jolokia
+            protocol: TCP
           - containerPort: 8080
             name: http
             protocol: TCP
@@ -140,7 +140,7 @@ objects:
           readinessProbe:
             failureThreshold: 3
             httpGet:
-              path: /health
+              path: /ws/demo/healthcheck
               port: 8080
               scheme: HTTP
             initialDelaySeconds: 20
@@ -149,85 +149,16 @@ objects:
             timeoutSeconds: 1
         terminationGracePeriodSeconds: 60
     triggers:
-    - imageChangeParams:
-        automatic: true
-        containerNames:
-        - ${APPLICATION_NAME}
-        from:
-          kind: ImageStream
-          name: ${APPLICATION_NAME}
-      type: ImageChange
     - type: ConfigChange
-- apiVersion: v1
-  kind: BuildConfig
-  metadata:
-    annotations:
-      pipeline.alpha.openshift.io/uses: '[{"name": "jenkins", "namespace": "", "kind": "DeploymentConfig"}]'
-    labels:
-      name: development-pipeline
-      application: ${APPLICATION_NAME}
-    name: ${APPLICATION_NAME}-pipeline
-  spec:
-    runPolicy: Serial
-    source:
-      git:
-        uri: "${SOURCE_URL}"
-      sourceSecret:
-        name: gitlab-user-pass
-      type: Git
-    strategy:
-      jenkinsPipelineStrategy:
-        jenkinsfile: |-
-          node('maven') {
-
-             stage ('Clone') {
-               git branch: "${SOURCE_REF}", url: "${SOURCE_URL}" ,credentialsId: "${DEV_NAMESPACE}-gitlab-user-pass"
-             }
-
-             stage('Build') {
-                    openshiftBuild(buildConfig: "${APPLICATION_NAME}", showBuildLogs: 'true')
-                  }
-
-             stage('Deploy') {
-                    openshiftDeploy(deploymentConfig: "${APPLICATION_NAME}")
-                  }
-
-             stage ('Promote') {
-               timeout(time:15, unit:'MINUTES') {
-                  input message: "Promote ${APPLICATION_NAME} to STAGE?", ok: "Promote"
-               }
-
-               def v = version()
-               // tag for stage
-               sh "oc tag ${DEV_NAMESPACE}/${APPLICATION_NAME}:latest ${STAGE_NAMESPACE}/${APPLICATION_NAME}:${v}"
-               // clean up. keep the imagestream
-               // sh "oc delete bc,dc,svc,route -l app=${APPLICATION_NAME} -n ${STAGE_NAMESPACE}"
-               // deploy stage image
-               sh "oc new-app ${APPLICATION_NAME}:${v} -n ${STAGE_NAMESPACE}"
-               sh "oc expose svc/${APPLICATION_NAME} -n ${STAGE_NAMESPACE}"
-             }
-          }
-
-          def version() {
-            def matcher = readFile('pom.xml') =~ '<version>(.+)</version>'
-            matcher ? matcher[0][1] : null
-          }
-      type: JenkinsPipeline
 parameters:
 - description: The name for the application.
   name: APPLICATION_NAME
   required: true
-  value: hello-world
-- description: GitLab source URI for application
+  value: tasks
+- description: Git source URI for application
   name: SOURCE_URL
   required: true
-  value: http://lg-l-d-osf00015.libgbl.biz/msa/HelloWorld.git
+  value: https://github.com/lbroudoux/openshift-tasks
 - description: Git branch/tag reference
   name: SOURCE_REF
   value: master
-- description: Development project namespace on OpenShift
-  name: DEV_NAMESPACE
-  value: dev-msa
-- description: Stage project namespace on OpenShift
-  name: STAGE_NAMESPACE
-  value: stage-msa
