@@ -67,7 +67,7 @@ objects:
         forcePull: true
         from:
           kind: ImageStreamTag
-          name: redhat-openjdk18-openshift:1.1
+          name: redhat-openjdk18-openshift:latest
           namespace: openshift
       type: Source
     triggers:
@@ -186,10 +186,10 @@ objects:
         jenkinsfile: |-
           node('maven') {
             stage 'build'
-            openshiftBuild(buildConfig: ${APPLICATION_NAME}, showBuildLogs: 'true', namespace: ${NAMESPACE})
+            openshiftBuild(buildConfig: "${APPLICATION_NAME}", showBuildLogs: 'true', namespace: "${NAMESPACE}")
 
             stage 'deploy'
-            openshiftDeploy(deploymentConfig: ${APPLICATION_NAME}, namespace: ${NAMESPACE})
+            openshiftDeploy(deploymentConfig: "${APPLICATION_NAME}", namespace: "${NAMESPACE}")
           }
       type: JenkinsPipeline
     triggers:
