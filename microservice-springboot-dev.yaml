@@ -1,0 +1,374 @@
+apiVersion: v1
+kind: Template
+metadata:
+  name: microservice-springboot-dev
+
+# template parameters
+parameters:
+- name: APP_NAME
+  displayName: Application Name
+  required: true
+
+- name: GIT_SOURCE_URL
+  displayName: Git source URL for microservice
+  required: true
+
+- name: GIT_SOURCE_BRANCH
+  displayName: Git source branch
+  value: master
+
+- name: DEV_NAMESPACE
+  displayName: Name of the development namespace to deploy to
+  required: true
+
+- name: IS_EXTERNAL
+  displayName: Headless deployment
+  required: false
+  value: "false"
+
+- name: DOM_SUFFIX
+  displayName: Domain suffix to use for the external route
+  required: false
+  value: osf.libgbl.biz
+
+
+objects:
+ # secret for gitlab credentials
+- apiVersion: v1
+  kind: Secret
+  data:
+    password: b3BlbnNoaWZ0MTIz
+    username: b3BlbnNoaWZ0
+  metadata:
+    name: gitlab-user-pass
+  type: kubernetes.io/basic-auth
+
+
+# deployment template
+- apiVersion: v1
+  kind: Template
+  metadata:
+    name: microservice-deployment-external
+  parameters:
+  - name: APPLICATION_NAME
+    displayName: Application Name
+    required: true
+  - name: ENVIRONMENT_NAME
+    displayName: Environment name to use in route URL
+    required: true
+  - name: DOMAIN_SUFFIX
+    displayName: Domain suffix to use for the route
+    required: true
+    value: ${DOM_SUFFIX}
+
+  objects:
+
+  - apiVersion: v1
+    kind: DeploymentConfig
+    metadata:
+      labels:
+        app: ${APPLICATION_NAME}
+        deploymentconfig: ${APPLICATION_NAME}
+      name: ${APPLICATION_NAME}
+    spec:
+      replicas: 1
+      selector:
+        app: ${APPLICATION_NAME}
+        deploymentconfig: ${APPLICATION_NAME}
+      strategy:
+        rollingParams:
+          intervalSeconds: 1
+          maxSurge: 25%
+          maxUnavailable: 25%
+          timeoutSeconds: 600
+          updatePeriodSeconds: 1
+        type: Rolling
+      template:
+        metadata:
+          # annotations:
+          #   prometheus.io/scrape: "true"
+          #   prometheus.io/path: "/metrics"
+          #   prometheus.io/port: "8080"
+          labels:
+            app: ${APPLICATION_NAME}
+            deploymentconfig: ${APPLICATION_NAME}
+        spec:
+          containers:
+          - imagePullPolicy: Always
+            image: docker-registry.default.svc:5000/${ENV_NAME}/${APPLICATION_NAME}
+            name: ${APPLICATION_NAME}
+            ports:
+            - containerPort: 8080
+              protocol: TCP
+            resources:
+              limits:
+                cpu: "1"
+                memory: 1Gi
+              requests:
+                cpu: 500m
+                memory: 512Mi
+            terminationMessagePath: /dev/termination-log
+            livenessProbe:
+              httpGet:
+                path: /health
+                port: 8080
+                scheme: HTTP
+              initialDelaySeconds: 30
+              timeoutSeconds: 2
+              periodSeconds: 10
+              successThreshold: 1
+              failureThreshold: 3
+            readinessProbe:
+              httpGet:
+                path: /health
+                port: 8080
+                scheme: HTTP
+              initialDelaySeconds: 30
+              timeoutSeconds: 2
+              periodSeconds: 10
+              successThreshold: 1
+              failureThreshold: 3
+          dnsPolicy: ClusterFirst
+          restartPolicy: Always
+          securityContext: {}
+          terminationGracePeriodSeconds: 30
+      test: false
+      triggers:
+      # - imageChangeParams:
+      #     automatic: false
+      #     containerNames:
+      #     - ${APP_NAME}
+      #     from:
+      #       kind: ImageStreamTag
+      #       name: ${APP_NAME}:latest
+      #   type: ImageChange
+      - type: ConfigChange
+    status: {}
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      labels:
+        app: ${APPLICATION_NAME}
+      name: ${APPLICATION_NAME}
+    spec:
+      ports:
+        - name: 8080-tcp
+          port: 8080
+          protocol: TCP
+          targetPort: 8080
+      selector:
+        deploymentconfig: ${APPLICATION_NAME}
+      type: ClusterIP
+  - apiVersion: v1
+    kind: Route
+    metadata:
+      annotations:
+        openshift.io/host.generated: "true"
+      name: ${APPLICATION_NAME}
+    spec:
+      host: ${APPLICATION_NAME}-${ENVIRONMENT_NAME}.${DOMAIN_SUFFIX}
+      port:
+        targetPort: 8080-tcp
+      to:
+        kind: Service
+        name: ${APPLICATION_NAME}
+        weight: 100
+      wildcardPolicy: None
+
+# headless deployment template
+- apiVersion: v1
+  kind: Template
+  metadata:
+    name: microservice-deployment-internal
+  parameters:
+  - name: APPLICATION_NAME
+    displayName: Application Name
+    required: true
+  - name: ENVIRONMENT_NAME
+    displayName: Environment name
+    required: false
+
+  objects:
+  - apiVersion: v1
+    kind: DeploymentConfig
+    metadata:
+      labels:
+        app: ${APPLICATION_NAME}
+        deploymentconfig: ${APPLICATION_NAME}
+      name: ${APPLICATION_NAME}
+    spec:
+      replicas: 1
+      selector:
+        app: ${APPLICATION_NAME}
+        deploymentconfig: ${APPLICATION_NAME}
+      strategy:
+        rollingParams:
+          intervalSeconds: 1
+          maxSurge: 25%
+          maxUnavailable: 25%
+          timeoutSeconds: 600
+          updatePeriodSeconds: 1
+        type: Rolling
+      template:
+        metadata:
+          annotations:
+            prometheus.io/scrape: "true"
+            prometheus.io/path: "/metrics"
+            prometheus.io/port: "8080"
+          labels:
+            app: ${APPLICATION_NAME}
+            deploymentconfig: ${APPLICATION_NAME}
+        spec:
+          containers:
+          - imagePullPolicy: Always
+            image: docker-registry.default.svc:5000/${ENVIRONMENT_NAME}/${APPLICATION_NAME}
+            name: ${APPLICATION_NAME}
+            ports:
+            - containerPort: 8080
+              protocol: TCP
+            resources:
+              limits:
+                cpu: "1"
+                memory: 1Gi
+              requests:
+                cpu: 500m
+                memory: 512Mi
+            terminationMessagePath: /dev/termination-log
+            livenessProbe:
+              httpGet:
+                path: /health
+                port: 8080
+                scheme: HTTP
+              initialDelaySeconds: 30
+              timeoutSeconds: 2
+              periodSeconds: 10
+              successThreshold: 1
+              failureThreshold: 3
+            readinessProbe:
+              httpGet:
+                path: /health
+                port: 8080
+                scheme: HTTP
+              initialDelaySeconds: 30
+              timeoutSeconds: 2
+              periodSeconds: 10
+              successThreshold: 1
+              failureThreshold: 3
+          dnsPolicy: ClusterFirst
+          restartPolicy: Always
+          securityContext: {}
+          terminationGracePeriodSeconds: 30
+      test: false
+      triggers:
+      # - imageChangeParams:
+      #     automatic: false
+      #     containerNames:
+      #     - ${APP_NAME}
+      #     from:
+      #       kind: ImageStreamTag
+      #       name: ${APP_NAME}:latest
+      #   type: ImageChange
+      # - type: ConfigChange
+    status: {}
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      labels:
+        app: ${APPLICATION_NAME}
+      name: ${APPLICATION_NAME}
+    spec:
+      ports:
+        - name: 8080-tcp
+          port: 8080
+          protocol: TCP
+          targetPort: 8080
+      selector:
+        deploymentconfig: ${APPLICATION_NAME}
+      type: ClusterIP
+
+
+# pipeline for development
+- apiVersion: v1
+  kind: BuildConfig
+  metadata:
+    name: ${APP_NAME}-pipeline
+    labels:
+      app: ${APP_NAME}-pipeline
+  spec:
+    nodeSelector: null
+    output: {}
+    postCommit: {}
+    resources: {}
+    runPolicy: Serial
+    source:
+      git:
+        uri: "${GIT_SOURCE_URL}"
+      sourceSecret:
+        name: gitlab-user-pass
+      type: Git
+    strategy:
+      type: JenkinsPipeline
+      jenkinsPipelineStrategy:
+        jenkinsfile: |-
+
+          def mvnCommand = 'mvn -Dhttp.proxyHost=172.23.29.156 -Dhttp.proxyPort=3128 -Dhttps.proxyHost=172.23.29.156 -Dhttps.proxyPort=3128'
+
+          node('mvn') {
+
+            stage('Build') {
+              //checkout code
+              deleteDir()
+              git branch: "${GIT_SOURCE_BRANCH}" ,url:"${GIT_SOURCE_URL}" ,credentialsId: "${DEV_NAMESPACE}-gitlab-user-pass"
+
+              //Run maven build
+              sh "${mvnCommand} clean install -DskipTests=true"
+            }
+            stage('Unit Test'){
+              //   sh "${mvnCommand} test"
+            }
+            stage('Build Image'){
+                sh "rm -rf oc-build && mkdir -p oc-build/deployments"
+                sh "cp target/*.jar oc-build/deployments/ROOT.jar"
+                sh "cp -r .s2i oc-build/"
+                sh "oc new-build --name=${APP_NAME} --image-stream=redhat-openjdk18-openshift:1.1 --binary=true --labels=app=${APP_NAME} -n ${DEV_NAMESPACE} || true"
+                sh "oc start-build ${APP_NAME} --from-dir=oc-build --wait=true -n ${DEV_NAMESPACE}"
+                def version = version()
+                sh "oc tag ${DEV_NAMESPACE}/${APP_NAME}:latest ${DEV_NAMESPACE}/${APP_NAME}:${version}"
+            }
+
+            stage('Deploy') {
+
+              //Apply deployment template and deploy
+              def version = version()
+              def template_name = ''
+              def is_external = "${IS_EXTERNAL}".toBoolean()
+              if(is_external){
+                template_name="microservice-deployment-external"
+              } else {
+                template_name="microservice-deployment-internal"
+              }
+              try {
+                  sh "oc process ${template_name} -l name=${APP_NAME} -p APPLICATION_NAME=${APP_NAME} -p ENVIRONMENT_NAME=${DEV_NAMESPACE} | oc create -f -"
+              } catch(err) {
+                  sh "oc process ${template_name} -l name=${APP_NAME} -p APPLICATION_NAME=${APP_NAME} -p ENVIRONMENT_NAME=${DEV_NAMESPACE} | oc replace --force -f -"
+              }
+              sleep 5
+              //load config map from file in git repo
+              sh "oc apply -f openshift/${APP_NAME}-config-${DEV_NAMESPACE}.yaml"
+
+              //pause rollout while we make a few changes
+              sh "oc rollout pause dc/${APP_NAME}"
+              sh "oc env dc/${APP_NAME} --from configmap/${APP_NAME}"
+              sh "oc set image dc/${APP_NAME} ${APP_NAME}=${APP_NAME}:${version} --source=imagestreamtag"
+              sh "oc rollout resume dc/${APP_NAME}"
+              openshiftDeploy(deploymentConfig: "${APP_NAME}")
+            }
+
+
+          }
+
+          def version() {
+            def matcher = readFile('pom.xml') =~ '<version>(.+)</version>'
+            matcher ? matcher[0][1] : null
+          }
+    triggers: []

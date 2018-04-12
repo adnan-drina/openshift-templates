@@ -1,0 +1,342 @@
+apiVersion: v1
+kind: Template
+labels:
+  template: spring-app-template-with-bluegreen-pipeline
+metadata:
+  labels:
+    application: spring-app-template-with-bluegreen-pipeline
+  name: spring-app-template-with-bluegreen-pipeline
+objects:
+- apiVersion: v1
+  data:
+    password: S3l4bnNuQ0FXMzdjNU14eDdOOUw=
+  kind: Secret
+  metadata:
+    name: gitlab-user
+  type: kubernetes.io/basic-auth
+
+- apiVersion: v1
+  kind: ImageStream
+  metadata:
+    labels:
+      application: ${APPLICATION_NAME}
+    name: ${APPLICATION_NAME}
+
+- apiVersion: v1
+  kind: Service
+  metadata:
+    annotations:
+      description: The web server's http port.
+    labels:
+      application: ${APPLICATION_NAME}-blue
+    name: ${APPLICATION_NAME}-blue
+  spec:
+    ports:
+    - port: 8080
+      targetPort: 8080
+    selector:
+      deploymentConfig: ${APPLICATION_NAME}-blue
+- apiVersion: v1
+  kind: Service
+  metadata:
+    annotations:
+      description: The web server's http port.
+    labels:
+      application: ${APPLICATION_NAME}-green
+    name: ${APPLICATION_NAME}-green
+  spec:
+    ports:
+    - port: 8080
+      targetPort: 8080
+    selector:
+      deploymentConfig: ${APPLICATION_NAME}-green
+
+- apiVersion: v1
+  kind: Route
+  metadata:
+    name: blue-${APPLICATION_NAME}
+  spec:
+    to:
+      kind: Service
+      name: ${APPLICATION_NAME}-blue
+- apiVersion: v1
+  kind: Route
+  metadata:
+    name: green-${APPLICATION_NAME}
+  spec:
+    to:
+      kind: Service
+      name: ${APPLICATION_NAME}-green
+- apiVersion: v1
+  kind: Route
+  metadata:
+    name: ${APPLICATION_NAME}
+  spec:
+    alternateBackends:
+    - name: ${APPLICATION_NAME}-green
+      weight: 0
+    to:
+      kind: Service
+      name: ${APPLICATION_NAME}-blue
+      weight: 100
+
+- apiVersion: v1
+  kind: BuildConfig
+  metadata:
+    labels:
+      application: ${APPLICATION_NAME}
+    name: ${APPLICATION_NAME}
+  spec:
+    output:
+      to:
+        kind: ImageStreamTag
+        name: ${APPLICATION_NAME}:${TAG}
+    source:
+      git:
+        ref: ${SOURCE_REF}
+        uri: ${SOURCE_URL}
+      sourceSecret:
+        name: gitlab-user
+      type: Git
+    strategy:
+      sourceStrategy:
+        forcePull: true
+        from:
+          kind: ImageStreamTag
+          name: redhat-openjdk18-openshift:latest
+          namespace: openshift
+      type: Source
+    triggers:
+    - github:
+        secret: kJZLvfQr3hZg
+      type: GitHub
+    - generic:
+        secret: kJZLvfQr3hZg
+      type: Generic
+
+- apiVersion: v1
+  kind: DeploymentConfig
+  metadata:
+    labels:
+      application: ${APPLICATION_NAME}-blue
+    name: ${APPLICATION_NAME}-blue
+  spec:
+    replicas: 1
+    selector:
+      deploymentConfig: ${APPLICATION_NAME}-blue
+    strategy:
+      resources: {}
+      rollingParams:
+        intervalSeconds: 1
+        maxSurge: 25%
+        maxUnavailable: 25%
+        timeoutSeconds: 600
+        updatePeriodSeconds: 1
+      type: Rolling
+    template:
+      metadata:
+        labels:
+          application: ${APPLICATION_NAME}-blue
+          deploymentConfig: ${APPLICATION_NAME}-blue
+        name: ${APPLICATION_NAME}-blue
+      spec:
+        containers:
+        - env:
+          - name: SERVER_PORT
+            value: "8080"
+          image: ${APPLICATION_NAME}:blue
+          imagePullPolicy: Always
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /health
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 45
+            periodSeconds: 45
+            successThreshold: 1
+            timeoutSeconds: 1
+          name: ${APPLICATION_NAME}-blue
+          ports:
+          - containerPort: 8080
+            name: http
+            protocol: TCP
+          - containerPort: 8888
+            name: ping
+            protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /health
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 20
+            periodSeconds: 5
+            successThreshold: 1
+            timeoutSeconds: 1
+        terminationGracePeriodSeconds: 60
+    triggers:
+    - imageChangeParams:
+        automatic: true
+        containerNames:
+        - ${APPLICATION_NAME}-blue
+        from:
+          kind: ImageStream
+          name: ${APPLICATION_NAME}:blue
+      type: ImageChange
+    - type: ConfigChange
+
+- apiVersion: v1
+  kind: DeploymentConfig
+  metadata:
+    labels:
+      application: ${APPLICATION_NAME}-green
+    name: ${APPLICATION_NAME}-green
+  spec:
+    replicas: 1
+    selector:
+      deploymentConfig: ${APPLICATION_NAME}-green
+    strategy:
+      resources: {}
+      rollingParams:
+        intervalSeconds: 1
+        maxSurge: 25%
+        maxUnavailable: 25%
+        timeoutSeconds: 600
+        updatePeriodSeconds: 1
+      type: Rolling
+    template:
+      metadata:
+        labels:
+          application: ${APPLICATION_NAME}-green
+          deploymentConfig: ${APPLICATION_NAME}-green
+        name: ${APPLICATION_NAME}-green
+      spec:
+        containers:
+        - env:
+          - name: SERVER_PORT
+            value: "8080"
+          image: ${APPLICATION_NAME}:green
+          imagePullPolicy: Always
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /health
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 45
+            periodSeconds: 45
+            successThreshold: 1
+            timeoutSeconds: 1
+          name: ${APPLICATION_NAME}-green
+          ports:
+          - containerPort: 8080
+            name: http
+            protocol: TCP
+          - containerPort: 8888
+            name: ping
+            protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /health
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 20
+            periodSeconds: 5
+            successThreshold: 1
+            timeoutSeconds: 1
+        terminationGracePeriodSeconds: 60
+    triggers:
+    - imageChangeParams:
+        automatic: true
+        containerNames:
+        - ${APPLICATION_NAME}-green
+        from:
+          kind: ImageStream
+          name: ${APPLICATION_NAME}:green
+      type: ImageChange
+    - type: ConfigChange
+
+- apiVersion: v1
+  kind: BuildConfig
+  metadata:
+    annotations:
+      pipeline.alpha.openshift.io/uses: '[{"name": "${APPLICATION_NAME}", "namespace": "", "kind": "DeploymentConfig"}]'
+    creationTimestamp: null
+    labels:
+      name: bluegreen-pipeline
+    name: ${APPLICATION_NAME}-bluegreen-pipeline
+  spec:
+    strategy:
+      jenkinsPipelineStrategy:
+        jenkinsfile: |-
+          try {
+             timeout(time: 20, unit: 'MINUTES') {
+                def appName="${APPLICATION_NAME}"
+                def imgTag="${TAG}"
+                def project=""
+                def tag="blue"
+                def altTag="green"
+                def verbose="${VERBOSE}"
+
+                node {
+                  project = env.PROJECT_NAME
+                  stage("Initialize") {
+                    sh "oc get route ${appName} -n ${project} -o jsonpath='{ .spec.to.name }' --loglevel=4 > activeservice"
+                    activeService = readFile('activeservice').trim()
+                    if (activeService == "${appName}-blue") {
+                      tag = "green"
+                      altTag = "blue"
+                    }
+                    sh "oc get route ${tag}-${appName} -n ${project} -o jsonpath='{ .spec.host }' --loglevel=4 > routehost"
+                    routeHost = readFile('routehost').trim()
+                  }
+
+                  stage("Build") {
+                    echo "building tag ${tag}"
+                    openshiftBuild buildConfig: appName, showBuildLogs: "true", verbose: verbose
+                  }
+
+                  stage("Deploy Test") {
+                    openshiftTag srcStream: appName, srcTag: imgTag, destinationStream: appName, destinationTag: tag, verbose: verbose
+                    openshiftVerifyDeployment deploymentConfig: "${appName}-${tag}", verbose: verbose
+                  }
+
+                  stage("Test") {
+                    input message: "Test deployment: http://${routeHost}. Approve?", id: "approval"
+                  }
+
+                  stage("Go Live") {
+                    sh "oc set -n ${project} route-backends ${appName} ${appName}-${tag}=100 ${appName}-${altTag}=0 --loglevel=4"
+                  }
+                }
+             }
+          } catch (err) {
+             echo "in catch block"
+             echo "Caught: ${err}"
+             currentBuild.result = 'FAILURE'
+             throw err
+          }
+      type: JenkinsPipeline
+
+parameters:
+- description: The name for the application.
+  name: APPLICATION_NAME
+  required: true
+  value: hello-world
+- description: GitLab source URI for application
+  name: SOURCE_URL
+  required: true
+  value: http://lg-l-d-osf00015.libgbl.biz/msa/HelloWorld.git
+- description: Git branch/tag reference
+  name: SOURCE_REF
+  value: master
+- description: Whether to enable verbose logging of Jenkinsfile steps in pipeline
+  name: VERBOSE
+  required: true
+  value: "false"
+- description: Please specify image tag to deploy
+  name: TAG
+  required: true
+  value: latest
