@@ -1,12 +1,10 @@
-*For other versions of OpenShift, follow the instructions in the corresponding branch e.g. ocp-3.6, ocp-3.5, etc at https://github.com/OpenShiftDemos/openshift-cd-demo*
+# CI/CD - OpenShift Container Platform 3.6
 
-# CI/CD Demo - OpenShift Container Platform 3.6
-
-This repository includes the infrastructure and pipeline definition for continuous delivery using Jenkins, Nexus and SonarQube on OpenShift.
+This repository includes the infrastructure and pipeline definition for continuous delivery using Jenkins on OpenShift.
 
 ## Create Project structure for CI/CD Pipeline (script)
 
-You can use the `scripts/provision.sh` script provided to deploy the entire demo:
+You can use the `scripts/provision.sh` script provided to deploy:
 
   ```
   ./provision.sh --help
@@ -18,8 +16,8 @@ You can use the `scripts/provision.sh` script provided to deploy the entire demo
 
   ```shell
   # Create Projects
-  oc new-project dev --display-name="Tasks - Dev"
-  oc new-project stage --display-name="Tasks - Stage"
+  oc new-project dev --display-name="Project - Dev"
+  oc new-project stage --display-name="Project - Stage"
   oc new-project cicd --display-name="CI/CD"
 
   # Grant Jenkins Access to Projects
