@@ -9,15 +9,6 @@ metadata:
   name: ${APPLICATION_NAME}
 
 objects:
-
-- apiVersion: v1
-  data:
-    password: S3l4bnNuQ0FXMzdjNU14eDdOOUw=
-  kind: Secret
-  metadata:
-    name: gitlab-user
-  type: kubernetes.io/basic-auth
-
 - apiVersion: v1
   data:
     password: b3BlbnNoaWZ0MTIz
@@ -85,7 +76,7 @@ objects:
         forcePull: true
         from:
           kind: ImageStreamTag
-          name: redhat-openjdk18-openshift:latest
+          name: ${BASE_IMAGE}
           namespace: openshift
       type: Source
     triggers:
@@ -246,6 +237,9 @@ parameters:
 - description: Git branch/tag reference
   name: SOURCE_REF
   value: master
+- description: Docker base image used to build container
+  name: BASE_IMAGE
+  value: redhat-openjdk18-openshift:1.4
 - description: Development project namespace on OpenShift
   name: DEV_NAMESPACE
   value: msa
