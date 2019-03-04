@@ -5,9 +5,11 @@ labels:
 metadata:
   labels:
     application: ${APPLICATION_NAME}
+    app: ${APPLICATION}
   name: ${APPLICATION_NAME}
+
 objects:
-  
+
 - apiVersion: v1
   data:
     password: S3l4bnNuQ0FXMzdjNU14eDdOOUw=
@@ -124,6 +126,8 @@ objects:
         - env:
           - name: SERVER_PORT
             value: "8080"
+          - name: SPRING_PROFILES_ACTIVE
+            value: ${SPRING_PROFILES}
           image: ${APPLICATION_NAME}
           imagePullPolicy: Always
           livenessProbe:
@@ -223,20 +227,28 @@ objects:
       type: JenkinsPipeline
 
 parameters:
-- description: The name for the application.
+- description: The name for the service.
   name: APPLICATION_NAME
   required: true
-  value: hello-world
+  value: dom-service-activation
+- description: The name for the application.
+  name: APPLICATION
+  required: true
+  value: service-activation-and-menagment
+- description: Active spring profile.
+  name: SPRING_PROFILES
+  required: true
+  value: openshift
 - description: GitLab source URI for application
   name: SOURCE_URL
   required: true
-  value: http://lg-l-d-osf00015.libgbl.biz/msa/HelloWorld.git
+  value: http://lg-l-d-osf00015.libgbl.biz/msa/dom-service-activation.git
 - description: Git branch/tag reference
   name: SOURCE_REF
   value: master
 - description: Development project namespace on OpenShift
   name: DEV_NAMESPACE
-  value: dev-msa
+  value: msa
 - description: Stage project namespace on OpenShift
   name: STAGE_NAMESPACE
   value: stage-msa
